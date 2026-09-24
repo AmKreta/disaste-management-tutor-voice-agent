@@ -1,0 +1,16 @@
+[project]
+name = "agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "python-dotenv",
+    "uvicorn",
+    "pipecat-ai[silero,websocket,openai]>=0.0.102",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.11"
