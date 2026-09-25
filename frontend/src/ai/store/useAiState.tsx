@@ -1,11 +1,18 @@
 import { create } from "zustand";
-import { AiConnectionStatus, LogKind, type LogEntry } from "../types";
+import {
+  AiConnectionStatus,
+  LogKind,
+  type LogEntry,
+  type VoiceSpeaker,
+} from "../types";
 
 type AiStateStoreType = {
   status: AiConnectionStatus;
+  speaker: VoiceSpeaker;
   chat: LogEntry[];
   logs: LogEntry[];
   setStatus: (status: AiConnectionStatus) => void;
+  setSpeaker: (speaker: VoiceSpeaker) => void;
   addLog: (message: string, kind?: LogKind) => void;
   addChatMessage: (message: string, kind?: LogKind) => void;
   clearLogs: () => void;
@@ -20,9 +27,16 @@ function inferKind(message: string): LogKind {
 
 export const useAiStateStore = create<AiStateStoreType>((set) => ({
   status: AiConnectionStatus.DISCONNECTED,
+  speaker: null,
   chat: [],
   logs: [],
-  setStatus: (status) => set({ status }),
+  setStatus: (status) =>
+    set((state) => ({
+      status,
+      speaker:
+        status === AiConnectionStatus.CONNECTED ? state.speaker : null,
+    })),
+  setSpeaker: (speaker) => set({ speaker }),
   addChatMessage: (message, kind) =>
     set((state) => ({
       chat: [...state.chat, {

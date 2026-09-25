@@ -21,6 +21,7 @@ export function AiProvider({ children }: { children: ReactNode }) {
   const setStatus = useAiStateStore((state) => state.setStatus);
   const addLog = useAiStateStore((state) => state.addLog);
   const addChatMessage = useAiStateStore((state) => state.addChatMessage);
+  const setSpeaker = useAiStateStore((state) => state.setSpeaker);
 
   const connect = async () => {
     if (!audioRef.current) return;
@@ -33,6 +34,7 @@ export function AiProvider({ children }: { children: ReactNode }) {
         },
         onLog: addLog,
         onChat: addChatMessage,
+        onSpeaker: setSpeaker,
       },
       audioRef.current
     );

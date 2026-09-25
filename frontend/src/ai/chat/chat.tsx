@@ -1,8 +1,9 @@
 import styled from "@emotion/styled";
 import { useEffect, useRef, useState } from "react";
+import { SineOrb } from "../../ui/sineOrb";
 import { DebugInfo } from "../debugInfo";
 import { useAiStateStore } from "../store/useAiState";
-import { LogKind } from "../types";
+import { AiConnectionStatus, LogKind } from "../types";
 import { ChatBubble } from "./chaBubble";
 import { ChatInput } from "./chatInput";
 
@@ -18,11 +19,23 @@ const Shell = styled.div`
   overflow: hidden;
 `;
 
-const Window = styled.div`
+const Window = styled.div<{ $docked?: boolean }>`
+  position: relative;
   flex: 1;
   overflow-y: auto;
-  padding: 20px 16px 16px;
+  padding: 20px 16px ${({ $docked }) => ($docked ? "168px" : "16px")};
   background-color: #fafafa;
+`;
+
+const OrbDock = styled.div`
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 84px;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
 `;
 
 const Thread = styled.div`
@@ -32,7 +45,7 @@ const Thread = styled.div`
 `;
 
 const Empty = styled.p`
-  margin: 48px 0 0;
+  margin: 12px 0 0;
   text-align: center;
   color: #9e9e9e;
   font-size: 14px;
@@ -53,8 +66,11 @@ const DebugOverlay = styled.div`
 
 export function Chat() {
   const chat = useAiStateStore((state) => state.chat);
+  const speaker = useAiStateStore((state) => state.speaker);
+  const status = useAiStateStore((state) => state.status);
   const [debugOpen, setDebugOpen] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const connected = status === AiConnectionStatus.CONNECTED;
 
   const messages = chat.filter(
     (entry) => entry.kind === LogKind.USER || entry.kind === LogKind.BOT
@@ -69,7 +85,7 @@ export function Chat() {
 
   return (
     <Shell>
-      <Window ref={scrollerRef}>
+      <Window ref={scrollerRef} $docked={connected}>
         {messages.length === 0 ? (
           <Empty>Tap the mic to start talking with the tutor.</Empty>
         ) : (
@@ -80,6 +96,11 @@ export function Chat() {
           </Thread>
         )}
       </Window>
+      {connected && (
+        <OrbDock>
+          <SineOrb speaker={speaker} />
+        </OrbDock>
+      )}
       {debugOpen && (
         <DebugOverlay>
           <DebugInfo compact />

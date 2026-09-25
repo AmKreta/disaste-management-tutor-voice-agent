@@ -20,6 +20,8 @@ export type LogEntry = {
   kind: LogKind;
 };
 
+export type VoiceSpeaker = LogKind.USER | LogKind.BOT | null;
+
 export const AI_STATUS_LABEL: Record<AiConnectionStatus, string> = {
   [AiConnectionStatus.CONNECTED]: "Connected",
   [AiConnectionStatus.DISCONNECTED]: "Disconnected",

@@ -4,12 +4,13 @@ import {
   type PipecatClientOptions,
 } from "@pipecat-ai/client-js";
 import { WebSocketTransport } from "@pipecat-ai/websocket-transport";
-import { AiConnectionStatus, LogKind } from "../ai/types";
+import { AiConnectionStatus, LogKind, type VoiceSpeaker } from "../ai/types";
 
 type SessionHandlers = {
   onStatus: (status: AiConnectionStatus, label: string) => void;
   onLog: (message: string) => void;
   onChat: (message: string, kind: LogKind.USER | LogKind.BOT) => void;
+  onSpeaker: (speaker: VoiceSpeaker) => void;
 };
 
 export class PipecatSession {
@@ -74,13 +75,29 @@ export class PipecatSession {
           this.handlers.onLog(`Bot ready: ${JSON.stringify(data)}`);
           this.setupMediaTracks();
         },
+        onUserStartedSpeaking: () => {
+          this.handlers.onSpeaker(LogKind.USER);
+        },
+        onUserStoppedSpeaking: () => {
+          this.handlers.onSpeaker(null);
+        },
+        onBotStartedSpeaking: () => {
+          this.handlers.onSpeaker(LogKind.BOT);
+        },
+        onBotStoppedSpeaking: () => {
+          this.handlers.onSpeaker(null);
+        },
         onUserTranscript: (data) => {
-          if (data.final) {
+          if (!data.final) {
+            this.handlers.onSpeaker(LogKind.USER);
+          } else {
             this.handlers.onChat(data.text, LogKind.USER);
           }
         },
-        onBotTranscript: (data) =>
-          this.handlers.onChat(data.text, LogKind.BOT),
+        onBotTranscript: (data) => {
+          this.handlers.onSpeaker(LogKind.BOT);
+          this.handlers.onChat(data.text, LogKind.BOT);
+        },
         onMessageError: (error) => console.error("Message error:", error),
         onError: (error) => console.error("Error:", error),
       },
