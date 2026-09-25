@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Load environment variables
 load_dotenv(override=True)
 
-from agent import run_bot
+from services import PresentationBot
 
 
 @asynccontextmanager
@@ -42,7 +42,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("WebSocket connection accepted")
     try:
-        await run_bot(websocket)
+        await PresentationBot(websocket).run()
     except Exception as e:
         print(f"Exception in run_bot: {e}")
 
