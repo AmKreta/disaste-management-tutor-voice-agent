@@ -76,12 +76,9 @@ class PresentationBot:
             min_volume=0.7,
         )
 
-    def create_llm_context(self):
-        return LLMContext([])
-
     def create_context_aggregator(self):
         return LLMContextAggregatorPair(
-            self.create_llm_context(),
+            LLMContext(messages=[]),
             user_params=LLMUserAggregatorParams(
                 vad_analyzer=SileroVADAnalyzer(params=self.create_vad_params()),
             ),
@@ -103,7 +100,7 @@ class PresentationBot:
 
     def create_task(self):
         presentation_observer = PresentationObserver()
-        return PipelineTask(
+        task = PipelineTask(
             self.create_pipeline(),
             params=PipelineParams(
                 allow_interruptions=True,
