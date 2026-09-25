@@ -4,11 +4,12 @@ import {
   type PipecatClientOptions,
 } from "@pipecat-ai/client-js";
 import { WebSocketTransport } from "@pipecat-ai/websocket-transport";
-import { AiConnectionStatus } from "../ai/types";
+import { AiConnectionStatus, LogKind } from "../ai/types";
 
 type SessionHandlers = {
   onStatus: (status: AiConnectionStatus, label: string) => void;
   onLog: (message: string) => void;
+  onChat: (message: string, kind: LogKind.USER | LogKind.BOT) => void;
 };
 
 export class PipecatSession {
@@ -75,10 +76,11 @@ export class PipecatSession {
         },
         onUserTranscript: (data) => {
           if (data.final) {
-            this.handlers.onLog(`User: ${data.text}`);
+            this.handlers.onChat(data.text, LogKind.USER);
           }
         },
-        onBotTranscript: (data) => this.handlers.onLog(`Bot: ${data.text}`),
+        onBotTranscript: (data) =>
+          this.handlers.onChat(data.text, LogKind.BOT),
         onMessageError: (error) => console.error("Message error:", error),
         onError: (error) => console.error("Error:", error),
       },

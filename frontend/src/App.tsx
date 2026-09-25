@@ -1,13 +1,6 @@
 import { Global, css } from "@emotion/react";
-import styled from "@emotion/styled";
-import { ChatHeader } from "./ai/chatHeader";
-import { DebugInfo } from "./ai/debugInfo";
+import { Chat } from "./ai/chat/chat";
 import { AiProvider } from "./ai/store/useAiContext";
-
-const Page = styled.div`
-  max-width: 1200px;
-  margin: 0 auto;
-`;
 
 const globalStyles = css`
   body {
@@ -21,11 +14,8 @@ const globalStyles = css`
 export function App() {
   return (
     <AiProvider>
-      <Global styles={globalStyles}/>
-      <Page>
-        <ChatHeader />
-        <DebugInfo />
-      </Page>
+      <Global styles={globalStyles} />
+      <Chat />
     </AiProvider>
   );
 }

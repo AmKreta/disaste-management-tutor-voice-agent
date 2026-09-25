@@ -1,26 +1,24 @@
 import styled from "@emotion/styled";
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 type TooltipProps = {
   text: string;
   children: ReactNode;
 };
 
+type Placement = "top" | "bottom";
+
 const Trigger = styled.span`
-  position: relative;
   display: inline-flex;
   align-items: center;
 `;
 
-const Bubble = styled.dialog`
-  position: absolute;
+const Bubble = styled.dialog<{ $placement: Placement; $arrowLeft: number }>`
+  position: fixed;
   inset: auto;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
   margin: 0;
-  max-width: 240px;
+  max-width: min(240px, calc(100vw - 16px));
   padding: 6px 8px;
   border: none;
   border-radius: 4px;
@@ -30,30 +28,69 @@ const Bubble = styled.dialog`
   line-height: 1.3;
   white-space: nowrap;
   pointer-events: none;
+  z-index: 20;
 
   &::after {
     content: "";
     position: absolute;
-    top: 100%;
-    left: 50%;
+    left: ${({ $arrowLeft }) => `${$arrowLeft}px`};
     transform: translateX(-50%);
     border: 5px solid transparent;
-    border-top-color: #333;
+    ${({ $placement }) =>
+      $placement === "top"
+        ? `
+      top: 100%;
+      border-top-color: #333;
+    `
+        : `
+      bottom: 100%;
+      border-bottom-color: #333;
+    `}
   }
 `;
 
 export function Tooltip({ text, children }: TooltipProps) {
+  const triggerRef = useRef<HTMLSpanElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const [placement, setPlacement] = useState<Placement>("top");
+  const [arrowLeft, setArrowLeft] = useState(12);
 
   if (!text) {
     return <>{children}</>;
   }
+
+  const place = () => {
+    const trigger = triggerRef.current;
+    const dialog = dialogRef.current;
+    if (!trigger || !dialog) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const tip = dialog.getBoundingClientRect();
+    const gap = 8;
+    const padding = 8;
+
+    let left = rect.left + rect.width / 2 - tip.width / 2;
+    left = Math.max(padding, Math.min(left, window.innerWidth - tip.width - padding));
+
+    let nextPlacement: Placement = "top";
+    let top = rect.top - tip.height - gap;
+    if (top < padding) {
+      nextPlacement = "bottom";
+      top = rect.bottom + gap;
+    }
+
+    dialog.style.left = `${left}px`;
+    dialog.style.top = `${top}px`;
+    setPlacement(nextPlacement);
+    setArrowLeft(rect.left + rect.width / 2 - left);
+  };
 
   const show = () => {
     const dialog = dialogRef.current;
     if (dialog && !dialog.open) {
       dialog.show();
     }
+    requestAnimationFrame(place);
   };
 
   const hide = () => {
@@ -64,9 +101,20 @@ export function Tooltip({ text, children }: TooltipProps) {
   };
 
   return (
-    <Trigger onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+    <Trigger
+      ref={triggerRef}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+    >
       {children}
-      <Bubble ref={dialogRef}>{text}</Bubble>
+      {createPortal(
+        <Bubble ref={dialogRef} $placement={placement} $arrowLeft={arrowLeft}>
+          {text}
+        </Bubble>,
+        document.body
+      )}
     </Trigger>
   );
 }

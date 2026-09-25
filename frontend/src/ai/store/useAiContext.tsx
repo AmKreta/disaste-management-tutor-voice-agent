@@ -20,6 +20,7 @@ export function AiProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const setStatus = useAiStateStore((state) => state.setStatus);
   const addLog = useAiStateStore((state) => state.addLog);
+  const addChatMessage = useAiStateStore((state) => state.addChatMessage);
 
   const connect = async () => {
     if (!audioRef.current) return;
@@ -31,6 +32,7 @@ export function AiProvider({ children }: { children: ReactNode }) {
           addLog(`Status: ${label}`);
         },
         onLog: addLog,
+        onChat: addChatMessage,
       },
       audioRef.current
     );

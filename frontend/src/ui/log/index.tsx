@@ -1,18 +1,20 @@
 import styled from "@emotion/styled";
 import { useEffect, useRef } from "react";
-import type { LogEntry, LogKind } from "../../ai/types";
+import { formatDateTime } from "../../utils/formatDateTime";
+import { LogKind, type LogEntry } from "../../ai/types";
 
 type LogsProps = {
   entries: LogEntry[];
+  compact?: boolean;
 };
 
 const logColor: Partial<Record<LogKind, string>> = {
-  user: "#2196F3",
-  bot: "#4CAF50",
+  [LogKind.USER]: "#2196F3",
+  [LogKind.BOT]: "#4CAF50",
 };
 
-const LogScroller = styled.div`
-  height: 500px;
+const LogScroller = styled.div<{ $compact?: boolean }>`
+  height: ${({ $compact }) => ($compact ? "220px" : "500px")};
   overflow-y: auto;
   background-color: #f8f8f8;
   padding: 10px;
@@ -26,7 +28,7 @@ const LogLine = styled.div<{ $kind: LogKind }>`
   color: ${({ $kind }) => logColor[$kind] ?? "inherit"};
 `;
 
-export function Logs({ entries }: LogsProps) {
+export function Logs({ entries, compact }: LogsProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,12 +39,16 @@ export function Logs({ entries }: LogsProps) {
   }, [entries]);
 
   return (
-    <LogScroller ref={scrollerRef}>
-      {entries.map((entry) => (
-        <LogLine key={entry.id} $kind={entry.kind}>
-          {entry.timestamp} - {entry.message}
-        </LogLine>
-      ))}
+    <LogScroller ref={scrollerRef} $compact={compact}>
+      {entries.length === 0 ? (
+        <LogLine $kind={LogKind.INFO}>No status logs yet.</LogLine>
+      ) : (
+        entries.map((entry) => (
+          <LogLine key={entry.id} $kind={entry.kind}>
+            {formatDateTime(entry.timestamp)} - {entry.message}
+          </LogLine>
+        ))
+      )}
     </LogScroller>
   );
 }
