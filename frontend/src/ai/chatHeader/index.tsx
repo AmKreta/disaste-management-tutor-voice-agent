@@ -1,6 +1,6 @@
 import styled from "@emotion/styled";
 import { Button } from "../../ui/button";
-import { Status } from "../../ui/status";
+import { Status, StatusTone } from "../../ui/status";
 import { useAiContext } from "../store/useAiContext";
 import { useAiStateStore } from "../store/useAiState";
 import { AiConnectionStatus, AI_STATUS_LABEL } from "../types";
@@ -26,7 +26,12 @@ export function ChatHeader() {
 
   return (
     <HeaderBar>
-      <Status value={AI_STATUS_LABEL[status]} />
+      <Status
+        tone={isConnected ? StatusTone.Success : StatusTone.Idle}
+        label="Transport"
+        value={AI_STATUS_LABEL[status]}
+        activity={isBusy}
+      />
       <div>
         <Button
           variant="connect"

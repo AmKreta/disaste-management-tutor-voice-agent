@@ -9,19 +9,19 @@ const Page = styled.div`
   margin: 0 auto;
 `;
 
+const globalStyles = css`
+  body {
+    margin: 0;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+  }
+`;
+
 export function App() {
   return (
     <AiProvider>
-      <Global
-        styles={css`
-          body {
-            margin: 0;
-            padding: 20px;
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-          }
-        `}
-      />
+      <Global styles={globalStyles}/>
       <Page>
         <ChatHeader />
         <DebugInfo />
