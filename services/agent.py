@@ -18,7 +18,7 @@ from pipecat.services.openai.stt import OpenAIRealtimeSTTService
 from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPIWebsocketTransport
 
-from presentation_observer import PresentationObserver
+from .presentation_observer import PresentationObserver
 
 
 class PresentationBot:
@@ -28,14 +28,7 @@ class PresentationBot:
         self.stt = self.create_stt(self.api_key)
         self.tts = self.create_tts(self.api_key)
         self.llm = self.create_llm(self.api_key)
-        self.vad = self.create_vad()
-        self.messages: list[LLMContextMessage] = []
-        self.llm_context = self.create_llm_context(self.messages)
-        self.context_aggregator = self.create_context_aggregator(self.llm_context)
-        self.pipeline = self.create_pipeline()
-        self.presentation_observer = PresentationObserver()
         self.task = self.create_task()
-        self.presentation_observer.set_task(self.task)
         self.add_event_handlers()
 
     def get_api_key(self):
@@ -73,7 +66,7 @@ class PresentationBot:
             ),
         )
     
-    def create_vad(self):
+    def create_vad_params(self):
         # Stricter VAD to reduce false "user spoke" from background noise: higher confidence,
         # longer sustained speech before trigger, higher minimum volume.
         return VADParams(
@@ -83,41 +76,45 @@ class PresentationBot:
             min_volume=0.7,
         )
 
-    def create_llm_context(self, messages: list[LLMContextMessage]):
-        return LLMContext(messages)
+    def create_llm_context(self):
+        return LLMContext([])
 
-    def create_context_aggregator(self, context: LLMContext):
+    def create_context_aggregator(self):
         return LLMContextAggregatorPair(
-            context,
+            self.create_llm_context(),
             user_params=LLMUserAggregatorParams(
-                vad_analyzer=SileroVADAnalyzer(params=self.create_vad()),
+                vad_analyzer=SileroVADAnalyzer(params=self.create_vad_params()),
             ),
         )
 
     def create_pipeline(self):
+        context_aggregator = self.create_context_aggregator()
         return Pipeline(
             [
                 self.websocket_transport.input(),
                 self.stt,
-                self.context_aggregator.user(),
+                context_aggregator.user(),
                 self.llm,
                 self.tts,
                 self.websocket_transport.output(),
-                self.context_aggregator.assistant(),
+                context_aggregator.assistant(),
             ]
         )
 
     def create_task(self):
+        presentation_observer = PresentationObserver()
         return PipelineTask(
-            self.pipeline,
+            self.create_pipeline(),
             params=PipelineParams(
                 allow_interruptions=True,
                 enable_metrics=True,
                 enable_usage_metrics=True,
             ),
-            observers=[self.presentation_observer],
+            observers=[presentation_observer],
             enable_turn_tracking=False
         )
+        presentation_observer.set_task(task)
+        return task
 
     def add_event_handlers(self):
         @self.websocket_transport.event_handler("on_client_connected")

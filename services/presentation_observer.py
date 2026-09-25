@@ -12,7 +12,7 @@ from pipecat.frames.frames import (
     UserStartedSpeakingFrame, StartFrame,
 )
 
-from constant import SLIDE_SYSTEM_MESSAGES
+from .constant import SLIDE_SYSTEM_MESSAGES
 
 class PresentationObserver(BaseObserver):
     """Observer that advances slides after 5 seconds of bot silence."""
