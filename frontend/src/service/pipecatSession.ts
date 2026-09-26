@@ -5,12 +5,17 @@ import {
 } from "@pipecat-ai/client-js";
 import { WebSocketTransport } from "@pipecat-ai/websocket-transport";
 import { AiConnectionStatus, LogKind, type VoiceSpeaker } from "../ai/types";
+import type { ChatUpdateMode } from "../ai/store/useAiState";
 import { BASE_URL } from "./constant";
 
 type SessionHandlers = {
   onStatus: (status: AiConnectionStatus, label: string) => void;
   onLog: (message: string) => void;
-  onChat: (message: string, kind: LogKind.USER | LogKind.BOT) => void;
+  onChat: (
+    message: string,
+    kind: LogKind.USER | LogKind.BOT,
+    mode?: ChatUpdateMode
+  ) => void;
   onSpeaker: (speaker: VoiceSpeaker) => void;
 };
 
@@ -18,7 +23,6 @@ const CONNECT_URL = `${BASE_URL}/connect`;
 
 export class PipecatSession {
   private client: PipecatClient | null = null;
-  private botSpeechText = "";
 
   constructor(
     private readonly handlers: SessionHandlers,
@@ -58,22 +62,6 @@ export class PipecatSession {
     });
   }
 
-  private collectBotSpeechText(text: string): void {
-    const chunk = text.trim();
-    if (!chunk) return;
-    const needsSpace =
-      this.botSpeechText.length > 0 &&
-      !/\s$/.test(this.botSpeechText) &&
-      !/^[,.;:!?)]/.test(chunk);
-    this.botSpeechText += `${needsSpace ? " " : ""}${chunk}`;
-  }
-
-  private flushBotSpeechText(): void {
-    const text = this.botSpeechText.trim();
-    this.botSpeechText = "";
-    if (text) this.handlers.onChat(text, LogKind.BOT);
-  }
-
   async connect(voiceId: string): Promise<void> {
     const startTime = Date.now();
     const config: PipecatClientOptions = {
@@ -85,7 +73,8 @@ export class PipecatSession {
           this.handlers.onStatus(AiConnectionStatus.CONNECTED, "Connected");
         },
         onDisconnected: () => {
-          this.flushBotSpeechText();
+          this.handlers.onChat("", LogKind.BOT, "finish");
+          this.handlers.onChat("", LogKind.USER, "finish");
           this.handlers.onStatus(
             AiConnectionStatus.DISCONNECTED,
             "Disconnected"
@@ -106,21 +95,19 @@ export class PipecatSession {
           this.handlers.onSpeaker(LogKind.BOT);
         },
         onBotStoppedSpeaking: () => {
-          // Display only text that has finished speaking. LLM text arrives
-          // before TTS playback, so showing it immediately makes the transcript
-          // run far ahead of the voice.
-          this.flushBotSpeechText();
+          this.handlers.onChat("", LogKind.BOT, "finish");
           this.handlers.onSpeaker(null);
         },
         onUserTranscript: (data) => {
           if (!data.final) {
             this.handlers.onSpeaker(LogKind.USER);
+            this.handlers.onChat(data.text, LogKind.USER, "replace");
           } else {
-            this.handlers.onChat(data.text, LogKind.USER);
+            this.handlers.onChat(data.text, LogKind.USER, "final");
           }
         },
         onBotTtsText: (data) => {
-          this.collectBotSpeechText(data.text);
+          this.handlers.onChat(data.text, LogKind.BOT, "append");
         },
         onMessageError: (error) => console.error("Message error:", error),
         onError: (error) => console.error("Error:", error),
