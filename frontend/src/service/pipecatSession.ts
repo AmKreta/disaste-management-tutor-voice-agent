@@ -133,12 +133,13 @@ export class PipecatSession {
   async disconnect(): Promise<void> {
     if (!this.client) return;
 
-    await this.client.disconnect();
+    const client = this.client;
     this.client = null;
-
+    this.audio.pause();
     if (this.audio.srcObject && "getAudioTracks" in this.audio.srcObject) {
       this.audio.srcObject.getAudioTracks().forEach((track) => track.stop());
       this.audio.srcObject = null;
     }
+    await client.disconnect();
   }
 }

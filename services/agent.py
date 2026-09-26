@@ -127,4 +127,10 @@ async def run_bot(websocket_client: WebSocket, voice: str = "alloy"):
     task = create_task(websocket_transport, voice)
     add_event_handlers(websocket_transport, task)
     runner = PipelineRunner(handle_sigint=False)
-    await runner.run(task)
+    try:
+        await runner.run(task)
+    finally:
+        # The transport callback normally cancels the worker. Keep this as a
+        # fallback for setup errors or any exit that bypasses that callback.
+        if not task.has_finished():
+            await task.cancel()

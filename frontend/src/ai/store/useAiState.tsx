@@ -54,9 +54,7 @@ export const useAiStateStore = create<AiStateStoreType>((set) => ({
         const streamingChatIds = { ...state.streamingChatIds };
         delete streamingChatIds[entryKind];
         return { streamingChatIds };
-      }
-
-      if (mode && mode !== "finish") {
+      }else if(mode){
         if (activeId) {
           const chat = state.chat.map((entry) => {
             if (entry.id !== activeId) return entry;

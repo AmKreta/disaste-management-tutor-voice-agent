@@ -57,13 +57,17 @@ export function AiProvider({ children }: { children: ReactNode }) {
   };
 
   const disconnect = async () => {
-    if (!sessionRef.current) return;
+    const session = sessionRef.current;
+    if (!session) return;
     try {
       setStatus(AiConnectionStatus.DISCONNECTING);
-      await sessionRef.current.disconnect();
-      sessionRef.current = null;
+      await session.disconnect();
     } catch (error) {
       addLog(`Error disconnecting: ${(error as Error).message}`);
+    } finally {
+      if (sessionRef.current === session) sessionRef.current = null;
+      setSpeaker(null);
+      setStatus(AiConnectionStatus.DISCONNECTED);
     }
   };
 
