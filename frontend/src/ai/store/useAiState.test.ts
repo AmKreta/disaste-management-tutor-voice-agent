@@ -35,4 +35,28 @@ describe("streaming chat updates", () => {
     expect(state.streamingChatIds[LogKind.BOT]).toBeUndefined();
     expect(activeId).toBe(state.chat[0].id);
   });
+
+  it("adds spaces when streamed chunks start after sentence punctuation", () => {
+    const { addChatMessage } = useAiStateStore.getState();
+
+    addChatMessage("Hello!", LogKind.BOT, "append");
+    addChatMessage("Today, we're exploring natural disasters.", LogKind.BOT, "append");
+    addChatMessage("We'll look at what they are.", LogKind.BOT, "append");
+
+    expect(useAiStateStore.getState().chat[0].message).toBe(
+      "Hello! Today, we're exploring natural disasters. We'll look at what they are."
+    );
+  });
+
+  it("does not insert spaces inside decimals or when the next chunk has one", () => {
+    const { addChatMessage } = useAiStateStore.getState();
+
+    addChatMessage("The value is 3.", LogKind.BOT, "append");
+    addChatMessage("14. Next value:", LogKind.BOT, "append");
+    addChatMessage(" 2.7.", LogKind.BOT, "append");
+
+    expect(useAiStateStore.getState().chat[0].message).toBe(
+      "The value is 3.14. Next value: 2.7."
+    );
+  });
 });

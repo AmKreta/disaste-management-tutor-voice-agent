@@ -109,6 +109,14 @@ function appendText(current: string, next: string): string {
   if (!current) return next;
   const left = current.slice(-1);
   const right = next.slice(0, 1);
-  const needsSpace = /[\p{L}\p{N}]$/u.test(left) && /[\p{L}\p{N}]/u.test(right);
+  const nextStartsWord = /[\p{L}\p{N}]/u.test(right);
+  const endsWord = /[\p{L}\p{N}]$/u.test(current);
+  const endsSentenceOrClause = /[.!?;,]$/u.test(current);
+  const numericContinuation = /[.,]$/.test(current) &&
+    /\d$/.test(current.slice(0, -1)) &&
+    /^\d/.test(next);
+  const needsSpace = nextStartsWord &&
+    (endsWord || endsSentenceOrClause) &&
+    !numericContinuation;
   return `${current}${needsSpace ? " " : ""}${next}`;
 }
