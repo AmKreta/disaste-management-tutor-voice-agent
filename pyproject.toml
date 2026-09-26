@@ -10,7 +10,16 @@ dependencies = [
     "pipecat-ai[silero,websocket,openai]>=0.0.102",
 ]
 
+[dependency-groups]
+dev = [
+    "httpx>=0.27,<1",
+    "pytest>=8,<9",
+]
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
