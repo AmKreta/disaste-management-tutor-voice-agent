@@ -1,1 +1,1 @@
-from .agent import PresentationBot
+from .agent import run_bot

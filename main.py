@@ -11,11 +11,10 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from services import run_bot
 
 # Load environment variables
 load_dotenv(override=True)
-
-from services import PresentationBot
 
 
 @asynccontextmanager
@@ -42,7 +41,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("WebSocket connection accepted")
     try:
-        await PresentationBot(websocket).run()
+        await run_bot(websocket)
     except Exception as e:
         print(f"Exception in run_bot: {e}")
 

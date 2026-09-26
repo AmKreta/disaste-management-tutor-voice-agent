@@ -20,110 +20,105 @@ from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPI
 
 from .presentation_observer import PresentationObserver
 
+def get_api_key():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY is not set")
+    return api_key
 
-class PresentationBot:
-    def __init__(self, websocket_client: WebSocket):
-        self.websocket_transport = self.create_websocket_transport(websocket_client)
-        self.api_key = self.get_api_key();
-        self.stt = self.create_stt(self.api_key)
-        self.tts = self.create_tts(self.api_key)
-        self.llm = self.create_llm(self.api_key)
-        self.task = self.create_task()
-        self.add_event_handlers()
+def create_stt(api_key: str):
+    return OpenAIRealtimeSTTService(
+        api_key=api_key,
+        model="gpt-4o-transcribe",
+    )
 
-    def get_api_key(self):
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY is not set")
-        return api_key
+def create_tts(api_key: str):
+    return OpenAITTSService(
+        api_key=api_key,
+        model="gpt-4o-mini-tts",
+        voice="alloy",
+        instructions="AI presenter for business people. Speak fast.",
+    )
 
-    def create_stt(self, api_key: str):
-        return OpenAIRealtimeSTTService(
-            api_key=api_key,
-            model="gpt-4o-transcribe",
-        )
+def create_llm(api_key: str):
+    return OpenAILLMService(
+        api_key=api_key,
+        model="gpt-4o",
+    )
 
-    def create_tts(self, api_key: str):
-        return OpenAITTSService(
-            api_key=api_key,
-            model="gpt-4o-mini-tts",
-            voice="alloy",
-            instructions="AI presenter for business people. Speak fast.",
-        )
-
-    def create_llm(self, api_key: str):
-        return OpenAILLMService(
-            api_key=api_key,
-            model="gpt-4o",
-        )
-
-    def create_websocket_transport(self, websocket_client: WebSocket):
-        return FastAPIWebsocketTransport(
-            websocket=websocket_client,
-            params=FastAPIWebsocketParams(
-                audio_in_enabled=True,
-                audio_out_enabled=True,
-                serializer=ProtobufFrameSerializer(),
-            ),
-        )
+def create_websocket_transport(websocket_client: WebSocket):
+    return FastAPIWebsocketTransport(
+        websocket=websocket_client,
+        params=FastAPIWebsocketParams(
+            audio_in_enabled=True,
+            audio_out_enabled=True,
+            serializer=ProtobufFrameSerializer(),
+        ),
+    )
     
-    def create_vad_params(self):
-        # Stricter VAD to reduce false "user spoke" from background noise: higher confidence,
-        # longer sustained speech before trigger, higher minimum volume.
-        return VADParams(
-            confidence=0.85,
-            start_secs=0.45,
-            stop_secs=0.35,
-            min_volume=0.7,
-        )
+def create_vad_params():
+    # Stricter VAD to reduce false "user spoke" from background noise: higher confidence,
+    # longer sustained speech before trigger, higher minimum volume.
+    return VADParams(
+        confidence=0.85,
+        start_secs=0.45,
+        stop_secs=0.35,
+        min_volume=0.7,
+    )
 
-    def create_context_aggregator(self):
-        return LLMContextAggregatorPair(
-            LLMContext(messages=[]),
-            user_params=LLMUserAggregatorParams(
-                vad_analyzer=SileroVADAnalyzer(params=self.create_vad_params()),
-            ),
-        )
+def create_context_aggregator():
+    return LLMContextAggregatorPair(
+        LLMContext(messages=[]),
+        user_params=LLMUserAggregatorParams(
+            vad_analyzer=SileroVADAnalyzer(params=create_vad_params()),
+        ),
+    )
 
-    def create_pipeline(self):
-        context_aggregator = self.create_context_aggregator()
-        return Pipeline(
-            [
-                self.websocket_transport.input(),
-                self.stt,
-                context_aggregator.user(),
-                self.llm,
-                self.tts,
-                self.websocket_transport.output(),
-                context_aggregator.assistant(),
-            ]
-        )
+def create_pipeline(websocket_transport: FastAPIWebsocketTransport):
+    context_aggregator = create_context_aggregator()
+    stt = create_stt(get_api_key())
+    llm = create_llm(get_api_key())
+    tts = create_tts(get_api_key())
+    return Pipeline(
+        [
+            websocket_transport.input(),
+            stt,
+            context_aggregator.user(),
+            llm,
+            tts,
+            websocket_transport.output(),
+            context_aggregator.assistant(),
+        ]
+    )
 
-    def create_task(self):
-        presentation_observer = PresentationObserver()
-        task = PipelineTask(
-            self.create_pipeline(),
-            params=PipelineParams(
-                allow_interruptions=True,
-                enable_metrics=True,
-                enable_usage_metrics=True,
-            ),
-            observers=[presentation_observer],
-            enable_turn_tracking=False
-        )
-        presentation_observer.set_task(task)
-        return task
+def create_task(websocket_transport: FastAPIWebsocketTransport):
+    presentation_observer = PresentationObserver()
+    task = PipelineTask(
+        create_pipeline(websocket_transport),
+        params=PipelineParams(
+            allow_interruptions=True,
+            enable_metrics=True,
+            enable_usage_metrics=True,
+        ),
+        observers=[presentation_observer],
+        enable_turn_tracking=False
+    )
+    presentation_observer.set_task(task)
+    return task
 
-    def add_event_handlers(self):
-        @self.websocket_transport.event_handler("on_client_connected")
-        async def on_client_connected():
-            logger.info("[transport] client connected")
+def add_event_handlers(websocket_transport: FastAPIWebsocketTransport, task: PipelineTask):
+    @websocket_transport.event_handler("on_client_connected")
+    async def on_client_connected():
+        logger.info("[transport] client connected")
 
-        @self.websocket_transport.event_handler("on_client_disconnected")
-        async def on_client_disconnected():
-            logger.info("[transport] client disconnected")
-            await self.task.cancel()
+    @websocket_transport.event_handler("on_client_disconnected")
+    async def on_client_disconnected():
+        logger.info("[transport] client disconnected")
+        await task.cancel()
 
-    async def run(self):
-        runner = PipelineRunner(handle_sigint=False)
-        await runner.run(self.task)
+async def run_bot(websocket_client: WebSocket):
+    websocket_transport = create_websocket_transport(websocket_client)
+    task = create_task(websocket_transport)
+    add_event_handlers(websocket_transport, task)
+    runner = PipelineRunner(handle_sigint=False)
+    await runner.run(task)
