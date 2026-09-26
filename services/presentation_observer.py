@@ -24,6 +24,8 @@ class PresentationObserver(BaseObserver):
         self._is_bot_speaking = False
         self._silence_timer: asyncio.TimerHandle | None = None
         self._user_spoke_since_last_slide = False
+        self._started = False
+        self._in_qna = False
 
     def set_task(self, task: PipelineTask):
         self.task = task
@@ -43,6 +45,8 @@ class PresentationObserver(BaseObserver):
         )
 
     async def _on_silence_timeout(self):
+        if self._in_qna:
+            return
         if not self._is_bot_speaking:
             if self._user_spoke_since_last_slide:
                 logger.info("3 seconds silence after user spoke; staying on slide and instructing AI to continue.")
@@ -55,8 +59,11 @@ class PresentationObserver(BaseObserver):
         frame = data.frame
 
         if isinstance(frame, StartFrame):
-            # Pipeline just started, force start with first slide
-            await self._on_silence_timeout()
+            # StartFrame is forwarded through the pipeline. Queue the first
+            # slide only for its first observation.
+            if not self._started:
+                self._started = True
+                await self.go_to_next_slide()
 
         elif isinstance(frame, BotStartedSpeakingFrame):
             self._is_bot_speaking = True
@@ -78,6 +85,8 @@ class PresentationObserver(BaseObserver):
 
     async def continue_current_slide(self):
         """Instruct the AI to stay on the current slide and continue where it left off."""
+        if self._in_qna:
+            return
         if self.current_slide < 0 or self.current_slide >= len(SLIDE_SYSTEM_MESSAGES):
             return
         self._user_spoke_since_last_slide = False
@@ -96,6 +105,8 @@ class PresentationObserver(BaseObserver):
         await self.task.queue_frames([LLMMessagesAppendFrame(messages=new_messages, run_llm=True)])
 
     async def go_to_next_slide(self):
+        if self._in_qna:
+            return
         self.current_slide += 1
         self._user_spoke_since_last_slide = False
         new_messages = []
@@ -103,8 +114,18 @@ class PresentationObserver(BaseObserver):
             print(f"Adding slide {self.current_slide} to context")
             new_messages.append({"role": "system", "content": SLIDE_SYSTEM_MESSAGES[self.current_slide]})
         elif self.current_slide == len(SLIDE_SYSTEM_MESSAGES):
-            print(f"Adding goodbye slide to context")
-            new_messages.append({"role": "system", "content": "Say goodbye and end the presentation."})
+            self._in_qna = True
+            print("Entering Q&A mode")
+            new_messages.append({
+                "role": "system",
+                "content": (
+                    "The presentation is complete. Give one short closing thought and invite "
+                    "the learner to ask a question once. Then stay in Q&A mode: answer each "
+                    "learner turn directly and naturally, and wait for their next turn. Do "
+                    "not greet again, repeat the presentation summary, invite more questions "
+                    "after every answer, or end the conversation."
+                ),
+            })
 
         if len(new_messages) > 0:
             await self.task.queue_frames([LLMMessagesAppendFrame(messages=new_messages, run_llm=True)])

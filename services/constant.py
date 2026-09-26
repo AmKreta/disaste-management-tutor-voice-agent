@@ -2,10 +2,9 @@ SLIDE_SYSTEM_MESSAGES: list[str] = [
     # Slide 1 – welcome & overview
     (
         "SLIDE 1: WELCOME & OVERVIEW\n\n"
-        "Welcome the audience and briefly introduce the topic: Natural Disasters. "
+        "Give one brief, natural welcome, then introduce the topic: Natural Disasters. "
         "Explain that this presentation will walk through what natural disasters are, why they occur, "
-        "and how they affect people and the environment. "
-        "Mention that questions are welcome at any time and that you will continue guiding them through the slides."
+        "and how they affect people and the environment. Do not invite questions here; continue into the lesson."
     ),
     # Slide 2 – what are natural disasters
     (
@@ -52,9 +51,8 @@ SLIDE_SYSTEM_MESSAGES: list[str] = [
     # Slide 8 – conclusion & discussion
     (
         "SLIDE 8: CONCLUSION & DISCUSSION\n\n"
-        "Summarize that natural disasters are powerful natural events that can have serious impacts on society "
-        "and the environment. "
-        "Emphasize the importance of preparedness, scientific understanding, and community cooperation. "
-        "Invite the audience to ask questions or request clarification on any slide."
+        "Briefly conclude that natural disasters can seriously affect people and the environment, and that "
+        "preparedness and community cooperation can reduce harm. Avoid repeating the opening or inviting "
+        "questions; the tutor will transition to Q&A after this slide."
     ),
 ]
