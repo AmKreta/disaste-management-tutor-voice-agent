@@ -18,6 +18,7 @@ const CONNECT_URL = `${BASE_URL}/connect`;
 
 export class PipecatSession {
   private client: PipecatClient | null = null;
+  private botSpeechText = "";
 
   constructor(
     private readonly handlers: SessionHandlers,
@@ -57,6 +58,22 @@ export class PipecatSession {
     });
   }
 
+  private collectBotSpeechText(text: string): void {
+    const chunk = text.trim();
+    if (!chunk) return;
+    const needsSpace =
+      this.botSpeechText.length > 0 &&
+      !/\s$/.test(this.botSpeechText) &&
+      !/^[,.;:!?)]/.test(chunk);
+    this.botSpeechText += `${needsSpace ? " " : ""}${chunk}`;
+  }
+
+  private flushBotSpeechText(): void {
+    const text = this.botSpeechText.trim();
+    this.botSpeechText = "";
+    if (text) this.handlers.onChat(text, LogKind.BOT);
+  }
+
   async connect(voiceId: string): Promise<void> {
     const startTime = Date.now();
     const config: PipecatClientOptions = {
@@ -68,6 +85,7 @@ export class PipecatSession {
           this.handlers.onStatus(AiConnectionStatus.CONNECTED, "Connected");
         },
         onDisconnected: () => {
+          this.flushBotSpeechText();
           this.handlers.onStatus(
             AiConnectionStatus.DISCONNECTED,
             "Disconnected"
@@ -88,6 +106,10 @@ export class PipecatSession {
           this.handlers.onSpeaker(LogKind.BOT);
         },
         onBotStoppedSpeaking: () => {
+          // Display only text that has finished speaking. LLM text arrives
+          // before TTS playback, so showing it immediately makes the transcript
+          // run far ahead of the voice.
+          this.flushBotSpeechText();
           this.handlers.onSpeaker(null);
         },
         onUserTranscript: (data) => {
@@ -97,9 +119,8 @@ export class PipecatSession {
             this.handlers.onChat(data.text, LogKind.USER);
           }
         },
-        onBotTranscript: (data) => {
-          this.handlers.onSpeaker(LogKind.BOT);
-          this.handlers.onChat(data.text, LogKind.BOT);
+        onBotTtsText: (data) => {
+          this.collectBotSpeechText(data.text);
         },
         onMessageError: (error) => console.error("Message error:", error),
         onError: (error) => console.error("Error:", error),

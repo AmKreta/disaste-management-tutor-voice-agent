@@ -42,6 +42,8 @@ def create_tts(api_key: str, voice: str):
         model="gpt-4o-mini-tts",
         voice=voice,
         instructions=tutor_tss_prompt,
+        # Keep generated text/audio from building up ahead of playback.
+        pause_frame_processing=True,
     )
 
 def create_llm(api_key: str):

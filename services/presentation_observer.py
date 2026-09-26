@@ -26,6 +26,7 @@ class PresentationObserver(BaseObserver):
         self._user_spoke_since_last_slide = False
         self._started = False
         self._in_qna = False
+        self._awaiting_question_answer = False
 
     def set_task(self, task: PipelineTask):
         self.task = task
@@ -68,14 +69,19 @@ class PresentationObserver(BaseObserver):
         elif isinstance(frame, BotStartedSpeakingFrame):
             self._is_bot_speaking = True
             self._cancel_silence_timer()
+            # The first tutor turn after learner speech is the answer. Resume
+            # the interrupted slide only after this answer has finished.
+            self._awaiting_question_answer = False
 
         elif isinstance(frame, UserStartedSpeakingFrame):
             self._user_spoke_since_last_slide = True
+            self._awaiting_question_answer = True
             self._cancel_silence_timer()
 
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self._is_bot_speaking = False
-            self._schedule_silence_check()
+            if not self._awaiting_question_answer:
+                self._schedule_silence_check()
 
         elif isinstance(frame, (EndFrame, CancelFrame)):
             # Pipeline is ending; stop any pending timers.
