@@ -69,6 +69,9 @@ export function Chat() {
   const chat = useAiStateStore((state) => state.chat);
   const speaker = useAiStateStore((state) => state.speaker);
   const status = useAiStateStore((state) => state.status);
+  const botStreamingId = useAiStateStore(
+    (state) => state.streamingChatIds[LogKind.BOT]
+  );
   const [debugOpen, setDebugOpen] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const connected = status === AiConnectionStatus.CONNECTED;
@@ -93,7 +96,12 @@ export function Chat() {
         ) : (
           <Thread>
             {messages.map((entry) => (
-              <ChatBubble key={entry.id} entry={entry} />
+              <ChatBubble
+                key={entry.id}
+                entry={entry}
+                isStreaming={entry.id === botStreamingId}
+                isSpeaking={entry.id === botStreamingId && speaker === LogKind.BOT}
+              />
             ))}
           </Thread>
         )}

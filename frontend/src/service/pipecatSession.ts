@@ -23,6 +23,7 @@ const CONNECT_URL = `${BASE_URL}/connect`;
 
 export class PipecatSession {
   private client: PipecatClient | null = null;
+  private botLlmTextReceived = false;
 
   constructor(
     private readonly handlers: SessionHandlers,
@@ -106,8 +107,21 @@ export class PipecatSession {
             this.handlers.onChat(data.text, LogKind.USER, "final");
           }
         },
-        onBotTtsText: (data) => {
+        onBotLlmStarted: () => {
+          this.botLlmTextReceived = false;
+        },
+        onBotLlmText: (data) => {
+          if (!data.text) return;
+          this.botLlmTextReceived = true;
           this.handlers.onChat(data.text, LogKind.BOT, "append");
+        },
+        onBotTtsText: (data) => {
+          // LLM text arrives earlier and feeds the playback-synced transcript.
+          // Keep TTS text as a compatibility fallback for transports that do
+          // not emit BotLLMText frames.
+          if (!this.botLlmTextReceived && data.text) {
+            this.handlers.onChat(data.text, LogKind.BOT, "append");
+          }
         },
         onMessageError: (error) => console.error("Message error:", error),
         onError: (error) => console.error("Error:", error),
