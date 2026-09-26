@@ -9,7 +9,9 @@ from pipecat.frames.frames import (
     CancelFrame,
     EndFrame,
     LLMMessagesAppendFrame,
-    UserStartedSpeakingFrame, StartFrame,
+    UserStartedSpeakingFrame,
+    UserStoppedSpeakingFrame,
+    StartFrame,
 )
 
 from .constant import SLIDE_SYSTEM_MESSAGES
@@ -27,6 +29,7 @@ class PresentationObserver(BaseObserver):
         self._started = False
         self._in_qna = False
         self._awaiting_question_answer = False
+        self._answer_watchdog: asyncio.TimerHandle | None = None
 
     def set_task(self, task: PipelineTask):
         self.task = task
@@ -35,6 +38,30 @@ class PresentationObserver(BaseObserver):
         if self._silence_timer:
             self._silence_timer.cancel()
             self._silence_timer = None
+
+    def _cancel_answer_watchdog(self):
+        if self._answer_watchdog:
+            self._answer_watchdog.cancel()
+            self._answer_watchdog = None
+
+    def _schedule_answer_watchdog(self):
+        # Fallback in case a learner "turn" never produces a bot reply (e.g. a
+        # spurious VAD trigger from background noise with no real speech).
+        # Without this, _awaiting_question_answer would only ever get cleared
+        # by BotStartedSpeakingFrame, permanently blocking silence-driven slide
+        # advancement for the rest of the session.
+        self._cancel_answer_watchdog()
+        loop = asyncio.get_event_loop()
+        self._answer_watchdog = loop.call_later(
+            6.0,
+            lambda: asyncio.create_task(self._on_answer_watchdog_timeout()),
+        )
+
+    async def _on_answer_watchdog_timeout(self):
+        if self._awaiting_question_answer and not self._is_bot_speaking:
+            logger.info("No bot reply after learner turn; resuming silence-driven progression.")
+            self._awaiting_question_answer = False
+            self._schedule_silence_check()
 
     def _schedule_silence_check(self):
         # Schedule a check 5 seconds after the bot stops speaking.
@@ -69,6 +96,7 @@ class PresentationObserver(BaseObserver):
         elif isinstance(frame, BotStartedSpeakingFrame):
             self._is_bot_speaking = True
             self._cancel_silence_timer()
+            self._cancel_answer_watchdog()
             # The first tutor turn after learner speech is the answer. Resume
             # the interrupted slide only after this answer has finished.
             self._awaiting_question_answer = False
@@ -77,6 +105,11 @@ class PresentationObserver(BaseObserver):
             self._user_spoke_since_last_slide = True
             self._awaiting_question_answer = True
             self._cancel_silence_timer()
+            self._cancel_answer_watchdog()
+
+        elif isinstance(frame, UserStoppedSpeakingFrame):
+            if self._awaiting_question_answer and not self._is_bot_speaking:
+                self._schedule_answer_watchdog()
 
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self._is_bot_speaking = False
@@ -86,6 +119,7 @@ class PresentationObserver(BaseObserver):
         elif isinstance(frame, (EndFrame, CancelFrame)):
             # Pipeline is ending; stop any pending timers.
             self._cancel_silence_timer()
+            self._cancel_answer_watchdog()
 
         # Observers are side-effect-only; nothing to push downstream.
 
