@@ -6,6 +6,7 @@ import { useAiStateStore } from "../store/useAiState";
 import { AiConnectionStatus, LogKind } from "../types";
 import { ChatBubble } from "./chaBubble";
 import { ChatInput } from "./chatInput";
+import { VoiceSettings } from "./voiceSettings";
 
 const Shell = styled.div`
   display: flex;
@@ -85,6 +86,7 @@ export function Chat() {
 
   return (
     <Shell>
+      {!connected && <VoiceSettings />}
       <Window ref={scrollerRef} $docked={connected}>
         {messages.length === 0 ? (
           <Empty>Tap the mic to start talking with the tutor.</Empty>
