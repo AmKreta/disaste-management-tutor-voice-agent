@@ -61,13 +61,13 @@ def create_websocket_transport(websocket_client: WebSocket):
     )
     
 def create_vad_params():
-    # Stricter VAD to reduce false "user spoke" from background noise: higher confidence,
-    # longer sustained speech before trigger, higher minimum volume.
+    # Balanced VAD: responsive enough to detect normal speech quickly,
+    # but still filters out ambient noise.
     return VADParams(
-        confidence=0.85,
-        start_secs=0.45,
-        stop_secs=0.35,
-        min_volume=0.7,
+        confidence=0.5,
+        start_secs=0.2,
+        stop_secs=0.8,
+        min_volume=0.3,
     )
 
 def create_context_aggregator():

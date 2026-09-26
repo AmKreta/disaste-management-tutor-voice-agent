@@ -99,10 +99,10 @@ class PresentationObserver(BaseObserver):
         self.current_slide += 1
         self._user_spoke_since_last_slide = False
         new_messages = []
-        if self.current_slide < len(SLIDE_SYSTEM_MESSAGES) - 1:
+        if self.current_slide < len(SLIDE_SYSTEM_MESSAGES):
             print(f"Adding slide {self.current_slide} to context")
             new_messages.append({"role": "system", "content": SLIDE_SYSTEM_MESSAGES[self.current_slide]})
-        elif self.current_slide == len(SLIDE_SYSTEM_MESSAGES) - 1:
+        elif self.current_slide == len(SLIDE_SYSTEM_MESSAGES):
             print(f"Adding goodbye slide to context")
             new_messages.append({"role": "system", "content": "Say goodbye and end the presentation."})
 
