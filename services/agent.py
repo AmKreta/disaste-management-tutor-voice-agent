@@ -33,7 +33,7 @@ def create_stt(api_key: str):
     return OpenAIRealtimeSTTService(
         api_key=api_key,
         model="gpt-4o-transcribe",
-        prompt=tutor_stt_prompt,
+        instructions=tutor_stt_prompt,
     )
 
 def create_tts(api_key: str, voice: str):
