@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { SessionMetrics } from "../../service/metricsApi";
 import {
   AiConnectionStatus,
   LogKind,
@@ -15,9 +16,11 @@ type AiStateStoreType = {
   chat: LogEntry[];
   streamingChatIds: Partial<Record<LogKind, string>>;
   logs: LogEntry[];
+  metrics: SessionMetrics | null;
   setStatus: (status: AiConnectionStatus) => void;
   setSpeaker: (speaker: VoiceSpeaker) => void;
   setSelectedVoice: (voiceId: string) => void;
+  setMetrics: (metrics: SessionMetrics | null) => void;
   addLog: (message: string, kind?: LogKind) => void;
   addChatMessage: (message: string, kind?: LogKind, mode?: ChatUpdateMode) => void;
   clearLogs: () => void;
@@ -37,6 +40,7 @@ export const useAiStateStore = create<AiStateStoreType>((set) => ({
   chat: [],
   streamingChatIds: {},
   logs: [],
+  metrics: null,
   setStatus: (status) =>
     set((state) => ({
       status,
@@ -45,6 +49,7 @@ export const useAiStateStore = create<AiStateStoreType>((set) => ({
     })),
   setSpeaker: (speaker) => set({ speaker }),
   setSelectedVoice: (selectedVoice) => set({ selectedVoice }),
+  setMetrics: (metrics) => set({ metrics }),
   addChatMessage: (message, kind, mode) =>
     set((state) => {
       const entryKind = kind ?? inferKind(message);

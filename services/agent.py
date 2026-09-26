@@ -22,6 +22,12 @@ from .presentation_observer import PresentationObserver
 from .prompts.tutor_llm_prompt import tutor_llm_prompt
 from .prompts.tutor_stt_prompt import tutor_stt_prompt
 from .prompts.tutor_tss_propmt import tutor_tss_prompt
+from .session_metrics import (
+    SessionMetricsCollector,
+    attach_session_metrics,
+    get_session_metrics,
+    store_session_metrics,
+)
 
 def get_api_key():
     api_key = os.getenv("OPENAI_API_KEY")
@@ -97,8 +103,9 @@ def create_pipeline(websocket_transport: FastAPIWebsocketTransport, voice: str):
         ]
     )
 
-def create_task(websocket_transport: FastAPIWebsocketTransport, voice: str):
+def create_task(websocket_transport: FastAPIWebsocketTransport, voice: str, session_id: str):
     presentation_observer = PresentationObserver()
+    metrics_observer, metrics_collector = attach_session_metrics(session_id)
     task = PipelineTask(
         create_pipeline(websocket_transport, voice),
         params=PipelineParams(
@@ -106,13 +113,18 @@ def create_task(websocket_transport: FastAPIWebsocketTransport, voice: str):
             enable_metrics=True,
             enable_usage_metrics=True,
         ),
-        observers=[presentation_observer],
+        observers=[presentation_observer, metrics_observer],
         enable_turn_tracking=False
     )
     presentation_observer.set_task(task)
-    return task
+    return task, metrics_collector
 
-def add_event_handlers(websocket_transport: FastAPIWebsocketTransport, task: PipelineTask):
+def add_event_handlers(
+    websocket_transport: FastAPIWebsocketTransport,
+    task: PipelineTask,
+    session_id: str,
+    metrics_collector: SessionMetricsCollector,
+):
     @websocket_transport.event_handler("on_client_connected")
     async def on_client_connected():
         logger.info("[transport] client connected")
@@ -120,16 +132,19 @@ def add_event_handlers(websocket_transport: FastAPIWebsocketTransport, task: Pip
     @websocket_transport.event_handler("on_client_disconnected")
     async def on_client_disconnected():
         logger.info("[transport] client disconnected")
+        store_session_metrics(session_id, metrics_collector.snapshot())
         await task.cancel()
 
-async def run_bot(websocket_client: WebSocket, voice: str = "alloy"):
+async def run_bot(websocket_client: WebSocket, voice: str = "alloy", session_id: str = ""):
     websocket_transport = create_websocket_transport(websocket_client)
-    task = create_task(websocket_transport, voice)
-    add_event_handlers(websocket_transport, task)
+    task, metrics_collector = create_task(websocket_transport, voice, session_id)
+    add_event_handlers(websocket_transport, task, session_id, metrics_collector)
     runner = PipelineRunner(handle_sigint=False)
     try:
         await runner.run(task)
     finally:
+        if session_id and get_session_metrics(session_id) is None:
+            store_session_metrics(session_id, metrics_collector.snapshot())
         # The transport callback normally cancels the worker. Keep this as a
         # fallback for setup errors or any exit that bypasses that callback.
         if not task.has_finished():

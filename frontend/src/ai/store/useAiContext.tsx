@@ -4,6 +4,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { fetchSessionMetrics } from "../../service/metricsApi";
 import { PipecatSession } from "../../service/pipecatSession";
 import { AiConnectionStatus } from "../types";
 import { useAiStateStore } from "./useAiState";
@@ -22,10 +23,12 @@ export function AiProvider({ children }: { children: ReactNode }) {
   const addLog = useAiStateStore((state) => state.addLog);
   const addChatMessage = useAiStateStore((state) => state.addChatMessage);
   const setSpeaker = useAiStateStore((state) => state.setSpeaker);
+  const setMetrics = useAiStateStore((state) => state.setMetrics);
 
   const connect = async () => {
     if (!audioRef.current) return;
     const voiceId = useAiStateStore.getState().selectedVoice;
+    setMetrics(null);
 
     const session = new PipecatSession(
       {
@@ -59,6 +62,7 @@ export function AiProvider({ children }: { children: ReactNode }) {
   const disconnect = async () => {
     const session = sessionRef.current;
     if (!session) return;
+    const sessionId = session.sessionId;
     try {
       setStatus(AiConnectionStatus.DISCONNECTING);
       await session.disconnect();
@@ -68,6 +72,15 @@ export function AiProvider({ children }: { children: ReactNode }) {
       if (sessionRef.current === session) sessionRef.current = null;
       setSpeaker(null);
       setStatus(AiConnectionStatus.DISCONNECTED);
+    }
+
+    if (!sessionId) return;
+    try {
+      const metrics = await fetchSessionMetrics(sessionId);
+      setMetrics(metrics);
+      addLog(`Metrics loaded for session ${sessionId}`);
+    } catch (error) {
+      addLog(`Could not load session metrics: ${(error as Error).message}`);
     }
   };
 

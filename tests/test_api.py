@@ -53,11 +53,23 @@ def test_play_sample_maps_synthesis_error_to_bad_gateway(monkeypatch):
     assert response.json() == {"detail": "Could not generate voice sample"}
 
 
-def test_connect_uses_requested_known_voice():
-    response = TestClient(main.app).post("/connect", json={"voice": "nova"})
-
+def _assert_connect(response, voice: str, session_id: str | None = None):
     assert response.status_code == 200
-    assert response.json() == {"ws_url": "ws://localhost:7860/ws?voice=nova"}
+    data = response.json()
+    assert set(data) == {"ws_url"}
+    prefix = f"ws://localhost:7860/ws?voice={voice}&session="
+    assert data["ws_url"].startswith(prefix)
+    returned_session = data["ws_url"].removeprefix(prefix)
+    assert returned_session
+    if session_id is not None:
+        assert returned_session == session_id
+
+
+def test_connect_uses_requested_known_voice():
+    response = TestClient(main.app).post(
+        "/connect", json={"voice": "nova", "session_id": "session-1"}
+    )
+    _assert_connect(response, "nova", "session-1")
 
 
 def test_connect_defaults_to_alloy_for_invalid_or_missing_voice():
@@ -65,39 +77,56 @@ def test_connect_defaults_to_alloy_for_invalid_or_missing_voice():
 
     for body in ({"voice": "not-a-voice"}, {}, ["nova"]):
         response = client.post("/connect", json=body)
-        assert response.status_code == 200
-        assert response.json() == {"ws_url": "ws://localhost:7860/ws?voice=alloy"}
+        _assert_connect(response, "alloy")
 
 
 def test_connect_defaults_to_alloy_for_invalid_json():
     response = TestClient(main.app).post(
         "/connect", content="not-json", headers={"content-type": "application/json"}
     )
+    _assert_connect(response, "alloy")
+
+
+def test_get_metrics_returns_stored_session(monkeypatch):
+    metrics = {"session_id": "session-1", "totals": {"llm_total_tokens": 12}}
+    monkeypatch.setattr(main, "get_session_metrics", lambda session_id: metrics if session_id == "session-1" else None)
+
+    response = TestClient(main.app).get("/metrics/session-1")
 
     assert response.status_code == 200
-    assert response.json() == {"ws_url": "ws://localhost:7860/ws?voice=alloy"}
+    assert response.json() == metrics
+
+
+def test_get_unknown_metrics_returns_not_found(monkeypatch):
+    monkeypatch.setattr(main, "get_session_metrics", lambda _session_id: None)
+
+    response = TestClient(main.app).get("/metrics/missing")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Unknown session"}
 
 
 def test_websocket_uses_known_voice(monkeypatch):
-    received: list[tuple[object, str]] = []
+    received: list[tuple[object, str, str]] = []
 
-    async def run_bot(websocket, voice: str) -> None:
-        received.append((websocket, voice))
+    async def run_bot(websocket, voice: str, session_id: str = "") -> None:
+        received.append((websocket, voice, session_id))
 
     monkeypatch.setattr(main, "run_bot", run_bot)
 
-    with TestClient(main.app).websocket_connect("/ws?voice=nova"):
+    with TestClient(main.app).websocket_connect("/ws?voice=nova&session=session-1"):
         pass
 
     assert len(received) == 1
     assert received[0][1] == "nova"
+    assert received[0][2] == "session-1"
 
 
 def test_websocket_defaults_invalid_voice_and_handles_agent_error(monkeypatch):
-    received: list[str] = []
+    received: list[tuple[str, str]] = []
 
-    async def run_bot(_websocket, voice: str) -> None:
-        received.append(voice)
+    async def run_bot(_websocket, voice: str, session_id: str = "") -> None:
+        received.append((voice, session_id))
         raise RuntimeError("agent stopped")
 
     monkeypatch.setattr(main, "run_bot", run_bot)
@@ -105,4 +134,5 @@ def test_websocket_defaults_invalid_voice_and_handles_agent_error(monkeypatch):
     with TestClient(main.app).websocket_connect("/ws?voice=invalid"):
         pass
 
-    assert received == ["alloy"]
+    assert received[0][0] == "alloy"
+    assert received[0][1]

@@ -3,7 +3,7 @@ import { LogKind } from "../types";
 import { useAiStateStore } from "./useAiState";
 
 afterEach(() => {
-  useAiStateStore.setState({ chat: [], streamingChatIds: {}, logs: [] });
+  useAiStateStore.setState({ chat: [], streamingChatIds: {}, logs: [], metrics: null });
 });
 
 describe("streaming chat updates", () => {

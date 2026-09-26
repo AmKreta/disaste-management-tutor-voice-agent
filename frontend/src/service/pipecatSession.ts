@@ -24,6 +24,7 @@ const CONNECT_URL = `${BASE_URL}/connect`;
 export class PipecatSession {
   private client: PipecatClient | null = null;
   private botLlmTextReceived = false;
+  sessionId: string | null = null;
 
   constructor(
     private readonly handlers: SessionHandlers,
@@ -135,25 +136,40 @@ export class PipecatSession {
     this.handlers.onLog("Initializing devices...");
     await this.client.initDevices();
 
+    this.sessionId = crypto.randomUUID();
     this.handlers.onLog("Connecting to bot...");
     await this.client.startBotAndConnect({
       endpoint: CONNECT_URL,
-      requestData: { voice: voiceId },
+      requestData: { voice: voiceId, session_id: this.sessionId },
     });
 
     this.handlers.onLog(`Connection complete, timeTaken: ${Date.now() - startTime}`);
   }
 
   async disconnect(): Promise<void> {
-    if (!this.client) return;
-
     const client = this.client;
     this.client = null;
-    this.audio.pause();
-    if (this.audio.srcObject && "getAudioTracks" in this.audio.srcObject) {
-      this.audio.srcObject.getAudioTracks().forEach((track) => track.stop());
-      this.audio.srcObject = null;
+    if (client?.connected) {
+      try {
+        await client.disconnect();
+      } catch (error) {
+        this.handlers.onLog(
+          `Transport disconnect failed: ${(error as Error).message}`
+        );
+      }
     }
-    await client.disconnect();
+
+    try {
+      this.audio.pause();
+      const srcObject = this.audio.srcObject;
+      if (srcObject && "getAudioTracks" in srcObject) {
+        srcObject.getAudioTracks().forEach((track) => track.stop());
+        this.audio.srcObject = null;
+      }
+    } catch (error) {
+      this.handlers.onLog(
+        `Audio cleanup failed: ${(error as Error).message}`
+      );
+    }
   }
 }

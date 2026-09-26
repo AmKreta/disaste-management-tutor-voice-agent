@@ -69,7 +69,7 @@ describe("VoiceSettings", () => {
 });
 
 describe("DebugInfo", () => {
-  beforeEach(() => useAiStateStore.setState({ logs: [] }));
+  beforeEach(() => useAiStateStore.setState({ logs: [], metrics: null }));
 
   it("shows a useful empty state and current debug logs", () => {
     const { rerender } = render(<DebugInfo />);
@@ -78,5 +78,29 @@ describe("DebugInfo", () => {
     useAiStateStore.getState().addLog("Status: Connected", LogKind.STATUS);
     rerender(<DebugInfo compact />);
     expect(screen.getByText(/Status: Connected/)).toBeInTheDocument();
+  });
+
+  it("shows fetched session metrics in the debug panel", () => {
+    useAiStateStore.getState().setMetrics({
+      session_id: "session-1",
+      totals: {
+        ttfb_count: 2,
+        ttfb_avg_seconds: 0.3,
+        ttfb_max_seconds: 0.4,
+        llm_prompt_tokens: 10,
+        llm_completion_tokens: 5,
+        llm_total_tokens: 15,
+        tts_characters: 42,
+        stt_audio_seconds: 1.25,
+      },
+      latency: [],
+      usage: [],
+    });
+
+    render(<DebugInfo compact />);
+
+    expect(screen.getByText(/session: session-1/)).toBeInTheDocument();
+    expect(screen.getByText(/llm tokens: 15/)).toBeInTheDocument();
+    expect(screen.getByText(/tts characters: 42/)).toBeInTheDocument();
   });
 });

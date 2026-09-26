@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD 2-Clause License
 #
 import asyncio
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 
@@ -13,6 +14,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from services import run_bot
+from services.session_metrics import get_session_metrics
 from services.voice_sample import is_known_voice, list_voices, synthesize_sample
 
 # Load environment variables
@@ -44,6 +46,12 @@ def _voice_from_value(value: Any) -> str:
     return "alloy"
 
 
+def _session_from_value(value: Any) -> str:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return str(uuid.uuid4())
+
+
 @app.get("/sample/voice")
 async def get_sample_voices() -> Dict[str, Any]:
     return {"voices": list_voices()}
@@ -60,13 +68,22 @@ async def play_sample(voice_id: str) -> Response:
     return Response(content=audio, media_type="audio/mpeg")
 
 
+@app.get("/metrics/{session_id}")
+async def get_metrics(session_id: str) -> Dict[str, Any]:
+    metrics = get_session_metrics(session_id)
+    if metrics is None:
+        raise HTTPException(status_code=404, detail="Unknown session")
+    return metrics
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     voice = _voice_from_value(websocket.query_params.get("voice"))
+    session_id = _session_from_value(websocket.query_params.get("session"))
     print("WebSocket connection accepted")
     try:
-        await run_bot(websocket, voice)
+        await run_bot(websocket, voice, session_id)
     except Exception as e:
         print(f"Exception in run_bot: {e}")
 
@@ -74,13 +91,15 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.post("/connect")
 async def bot_connect(request: Request) -> Dict[Any, Any]:
     voice = "alloy"
+    session_id = str(uuid.uuid4())
     try:
         body = await request.json()
     except Exception:
         body = None
     if isinstance(body, dict):
         voice = _voice_from_value(body.get("voice"))
-    return {"ws_url": f"ws://localhost:7860/ws?voice={voice}"}
+        session_id = _session_from_value(body.get("session_id"))
+    return {"ws_url": f"ws://localhost:7860/ws?voice={voice}&session={session_id}"}
 
 
 async def main():
