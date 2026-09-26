@@ -19,6 +19,9 @@ from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams, FastAPIWebsocketTransport
 
 from .presentation_observer import PresentationObserver
+from .prompts.tutor_llm_prompt import tutor_llm_prompt
+from .prompts.tutor_stt_prompt import tutor_stt_prompt
+from .prompts.tutor_tss_propmt import tutor_tss_prompt
 
 def get_api_key():
     api_key = os.getenv("OPENAI_API_KEY")
@@ -30,14 +33,15 @@ def create_stt(api_key: str):
     return OpenAIRealtimeSTTService(
         api_key=api_key,
         model="gpt-4o-transcribe",
+        prompt=tutor_stt_prompt,
     )
 
-def create_tts(api_key: str):
+def create_tts(api_key: str, voice: str):
     return OpenAITTSService(
         api_key=api_key,
         model="gpt-4o-mini-tts",
-        voice="alloy",
-        instructions="AI presenter for business people. Speak fast.",
+        voice=voice,
+        instructions=tutor_tss_prompt,
     )
 
 def create_llm(api_key: str):
@@ -68,17 +72,17 @@ def create_vad_params():
 
 def create_context_aggregator():
     return LLMContextAggregatorPair(
-        LLMContext(messages=[]),
+        LLMContext(messages=[{"role": "system", "content": tutor_llm_prompt}]),
         user_params=LLMUserAggregatorParams(
             vad_analyzer=SileroVADAnalyzer(params=create_vad_params()),
         ),
     )
 
-def create_pipeline(websocket_transport: FastAPIWebsocketTransport):
+def create_pipeline(websocket_transport: FastAPIWebsocketTransport, voice: str):
     context_aggregator = create_context_aggregator()
     stt = create_stt(get_api_key())
     llm = create_llm(get_api_key())
-    tts = create_tts(get_api_key())
+    tts = create_tts(get_api_key(), voice)
     return Pipeline(
         [
             websocket_transport.input(),
@@ -91,10 +95,10 @@ def create_pipeline(websocket_transport: FastAPIWebsocketTransport):
         ]
     )
 
-def create_task(websocket_transport: FastAPIWebsocketTransport):
+def create_task(websocket_transport: FastAPIWebsocketTransport, voice: str):
     presentation_observer = PresentationObserver()
     task = PipelineTask(
-        create_pipeline(websocket_transport),
+        create_pipeline(websocket_transport, voice),
         params=PipelineParams(
             allow_interruptions=True,
             enable_metrics=True,
@@ -116,9 +120,9 @@ def add_event_handlers(websocket_transport: FastAPIWebsocketTransport, task: Pip
         logger.info("[transport] client disconnected")
         await task.cancel()
 
-async def run_bot(websocket_client: WebSocket):
+async def run_bot(websocket_client: WebSocket, voice: str = "alloy"):
     websocket_transport = create_websocket_transport(websocket_client)
-    task = create_task(websocket_transport)
+    task = create_task(websocket_transport, voice)
     add_event_handlers(websocket_transport, task)
     runner = PipelineRunner(handle_sigint=False)
     await runner.run(task)

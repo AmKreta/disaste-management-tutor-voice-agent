@@ -25,6 +25,7 @@ export function AiProvider({ children }: { children: ReactNode }) {
 
   const connect = async () => {
     if (!audioRef.current) return;
+    const voiceId = useAiStateStore.getState().selectedVoice;
 
     const session = new PipecatSession(
       {
@@ -42,7 +43,7 @@ export function AiProvider({ children }: { children: ReactNode }) {
 
     try {
       setStatus(AiConnectionStatus.CONNECTING);
-      await session.connect();
+      await session.connect(voiceId);
     } catch (error) {
       addLog(`Error connecting: ${(error as Error).message}`);
       setStatus(AiConnectionStatus.ERROR);

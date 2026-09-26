@@ -5,6 +5,7 @@ import {
 } from "@pipecat-ai/client-js";
 import { WebSocketTransport } from "@pipecat-ai/websocket-transport";
 import { AiConnectionStatus, LogKind, type VoiceSpeaker } from "../ai/types";
+import { BASE_URL } from "./constant";
 
 type SessionHandlers = {
   onStatus: (status: AiConnectionStatus, label: string) => void;
@@ -12,6 +13,8 @@ type SessionHandlers = {
   onChat: (message: string, kind: LogKind.USER | LogKind.BOT) => void;
   onSpeaker: (speaker: VoiceSpeaker) => void;
 };
+
+const CONNECT_URL = `${BASE_URL}/connect`;
 
 export class PipecatSession {
   private client: PipecatClient | null = null;
@@ -54,7 +57,7 @@ export class PipecatSession {
     });
   }
 
-  async connect(): Promise<void> {
+  async connect(voiceId: string): Promise<void> {
     const startTime = Date.now();
     const config: PipecatClientOptions = {
       transport: new WebSocketTransport(),
@@ -112,7 +115,8 @@ export class PipecatSession {
 
     this.handlers.onLog("Connecting to bot...");
     await this.client.startBotAndConnect({
-      endpoint: "http://localhost:7860/connect",
+      endpoint: CONNECT_URL,
+      requestData: { voice: voiceId },
     });
 
     this.handlers.onLog(`Connection complete, timeTaken: ${Date.now() - startTime}`);

@@ -9,10 +9,12 @@ import {
 type AiStateStoreType = {
   status: AiConnectionStatus;
   speaker: VoiceSpeaker;
+  selectedVoice: string;
   chat: LogEntry[];
   logs: LogEntry[];
   setStatus: (status: AiConnectionStatus) => void;
   setSpeaker: (speaker: VoiceSpeaker) => void;
+  setSelectedVoice: (voiceId: string) => void;
   addLog: (message: string, kind?: LogKind) => void;
   addChatMessage: (message: string, kind?: LogKind) => void;
   clearLogs: () => void;
@@ -28,6 +30,7 @@ function inferKind(message: string): LogKind {
 export const useAiStateStore = create<AiStateStoreType>((set) => ({
   status: AiConnectionStatus.DISCONNECTED,
   speaker: null,
+  selectedVoice: "alloy",
   chat: [],
   logs: [],
   setStatus: (status) =>
@@ -37,6 +40,7 @@ export const useAiStateStore = create<AiStateStoreType>((set) => ({
         status === AiConnectionStatus.CONNECTED ? state.speaker : null,
     })),
   setSpeaker: (speaker) => set({ speaker }),
+  setSelectedVoice: (selectedVoice) => set({ selectedVoice }),
   addChatMessage: (message, kind) =>
     set((state) => ({
       chat: [...state.chat, {

@@ -9,9 +9,11 @@ from typing import Any, Dict
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from services import run_bot
+from services.voice_sample import is_known_voice, list_voices, synthesize_sample
 
 # Load environment variables
 load_dotenv(override=True)
@@ -36,19 +38,49 @@ app.add_middleware(
 )
 
 
+def _voice_from_value(value: Any) -> str:
+    if isinstance(value, str) and is_known_voice(value):
+        return value
+    return "alloy"
+
+
+@app.get("/sample/voice")
+async def get_sample_voices() -> Dict[str, Any]:
+    return {"voices": list_voices()}
+
+
+@app.get("/sample/play/{voice_id}")
+async def play_sample(voice_id: str) -> Response:
+    if not is_known_voice(voice_id):
+        raise HTTPException(status_code=404, detail="Unknown voice")
+    try:
+        audio = await synthesize_sample(voice_id)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Could not generate voice sample") from exc
+    return Response(content=audio, media_type="audio/mpeg")
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    voice = _voice_from_value(websocket.query_params.get("voice"))
     print("WebSocket connection accepted")
     try:
-        await run_bot(websocket)
+        await run_bot(websocket, voice)
     except Exception as e:
         print(f"Exception in run_bot: {e}")
 
 
 @app.post("/connect")
 async def bot_connect(request: Request) -> Dict[Any, Any]:
-    return {"ws_url": "ws://localhost:7860/ws"}
+    voice = "alloy"
+    try:
+        body = await request.json()
+    except Exception:
+        body = None
+    if isinstance(body, dict):
+        voice = _voice_from_value(body.get("voice"))
+    return {"ws_url": f"ws://localhost:7860/ws?voice={voice}"}
 
 
 async def main():
