@@ -23,3 +23,6 @@ pythonVersion = "3.11"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+markers = [
+    "eval: opt-in tests that call a tutor model and an LLM judge",
+]
