@@ -24,6 +24,7 @@ const CONNECT_URL = `${BASE_URL}/connect`;
 export class PipecatSession {
   private client: PipecatClient | null = null;
   private botLlmTextReceived = false;
+  private closed = false;
   sessionId: string | null = null;
 
   constructor(
@@ -32,6 +33,7 @@ export class PipecatSession {
   ) {}
 
   private setupAudioTrack(track: MediaStreamTrack): void {
+    if (this.closed) return;
     this.handlers.onLog("Setting up audio track");
     if (this.audio.srcObject && "getAudioTracks" in this.audio.srcObject) {
       const oldTrack = this.audio.srcObject.getAudioTracks()[0];
@@ -52,9 +54,8 @@ export class PipecatSession {
     if (!this.client) return;
 
     this.client.on(RTVIEvent.TrackStarted, (track, participant) => {
-      if (!participant?.local && track.kind === "audio") {
-        this.setupAudioTrack(track);
-      }
+      if (this.closed || participant?.local || track.kind !== "audio") return;
+      this.setupAudioTrack(track);
     });
 
     this.client.on(RTVIEvent.TrackStopped, (track, participant) => {
@@ -65,6 +66,7 @@ export class PipecatSession {
   }
 
   async connect(voiceId: string): Promise<void> {
+    this.closed = false;
     const startTime = Date.now();
     const config: PipecatClientOptions = {
       transport: new WebSocketTransport(),
@@ -146,19 +148,16 @@ export class PipecatSession {
     this.handlers.onLog(`Connection complete, timeTaken: ${Date.now() - startTime}`);
   }
 
-  async disconnect(): Promise<void> {
-    const client = this.client;
-    this.client = null;
-    if (client?.connected) {
-      try {
-        await client.disconnect();
-      } catch (error) {
-        this.handlers.onLog(
-          `Transport disconnect failed: ${(error as Error).message}`
-        );
-      }
+  private forceCloseSocket(client: PipecatClient): void {
+    const transport = client.transport as { _ws?: { close?: () => unknown } };
+    try {
+      void transport._ws?.close?.();
+    } catch {
+      // The socket may already be closed.
     }
+  }
 
+  private stopLocalAudio(): void {
     try {
       this.audio.pause();
       const srcObject = this.audio.srcObject;
@@ -171,5 +170,31 @@ export class PipecatSession {
         `Audio cleanup failed: ${(error as Error).message}`
       );
     }
+  }
+
+  async disconnect(): Promise<void> {
+    const client = this.client;
+    this.closed = true;
+    this.client = null;
+    this.stopLocalAudio();
+
+    if (!client) return;
+
+    try {
+      client.enableMic(false);
+    } catch {
+      // Mic may already be off or devices may not be ready.
+    }
+
+    try {
+      await client.disconnect();
+    } catch (error) {
+      const message = (error as Error).message;
+      if (!message.includes("please call .begin() first")) {
+        this.handlers.onLog(`Transport disconnect failed: ${message}`);
+      }
+    }
+
+    this.forceCloseSocket(client);
   }
 }

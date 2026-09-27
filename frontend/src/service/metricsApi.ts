@@ -18,8 +18,8 @@ export type SessionMetrics = {
   usage: unknown[];
 };
 
-const RETRY_DELAY_MS = 150;
-const RETRY_ATTEMPTS = 8;
+const RETRY_DELAY_MS = 200;
+const RETRY_ATTEMPTS = 16;
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -29,7 +29,7 @@ export async function fetchSessionMetrics(sessionId: string): Promise<SessionMet
   let lastError: Error = new Error("Could not load session metrics");
 
   for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt += 1) {
-    const response = await fetch(`${BASE_URL}/metrics/${sessionId}`);
+    const response = await fetch(`${BASE_URL}/metrics/${encodeURIComponent(sessionId)}`);
     if (response.ok) {
       return (await response.json()) as SessionMetrics;
     }
@@ -41,6 +41,8 @@ export async function fetchSessionMetrics(sessionId: string): Promise<SessionMet
     if (response.status !== 404 || attempt === RETRY_ATTEMPTS - 1) {
       break;
     }
+    // The websocket disconnect and the server-side pipeline shutdown are
+    // asynchronous. Give the server a few seconds to persist the final snapshot.
     await wait(RETRY_DELAY_MS);
   }
 
