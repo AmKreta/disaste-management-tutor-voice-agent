@@ -72,6 +72,19 @@ def test_connect_uses_requested_known_voice():
     _assert_connect(response, "nova", "session-1")
 
 
+def test_connect_registers_metrics_for_later_fetch():
+    client = TestClient(main.app)
+    client.post("/connect", json={"voice": "nova", "session_id": "session-metrics"})
+
+    response = client.get("/metrics/session-metrics")
+    assert response.status_code == 200
+    assert response.json()["session_id"] == "session-metrics"
+
+    finalized = client.post("/metrics/session-metrics")
+    assert finalized.status_code == 200
+    assert finalized.json()["session_id"] == "session-metrics"
+
+
 def test_connect_defaults_to_alloy_for_invalid_or_missing_voice():
     client = TestClient(main.app)
 
@@ -101,6 +114,15 @@ def test_get_unknown_metrics_returns_not_found(monkeypatch):
     monkeypatch.setattr(main, "get_session_metrics", lambda _session_id: None)
 
     response = TestClient(main.app).get("/metrics/missing")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Unknown session"}
+
+
+def test_post_unknown_metrics_returns_not_found(monkeypatch):
+    monkeypatch.setattr(main, "finalize_session_metrics", lambda _session_id: None)
+
+    response = TestClient(main.app).post("/metrics/missing")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Unknown session"}

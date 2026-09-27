@@ -8,6 +8,8 @@ from pipecat.observers.service_metrics_observer import (
 )
 
 SESSION_METRICS: dict[str, dict[str, Any]] = {}
+COLLECTORS: dict[str, "SessionMetricsCollector"] = {}
+_last_connect_session_id: str | None = None
 
 
 class SessionMetricsCollector:
@@ -56,6 +58,11 @@ class SessionMetricsCollector:
             "usage": [record.model_dump() for record in self.usages],
         }
 
+    def persist(self) -> dict[str, Any]:
+        snapshot = self.snapshot()
+        store_session_metrics(self.session_id, snapshot)
+        return snapshot
+
 
 def store_session_metrics(session_id: str, metrics: dict[str, Any]) -> None:
     SESSION_METRICS[session_id] = metrics
@@ -65,16 +72,53 @@ def get_session_metrics(session_id: str) -> dict[str, Any] | None:
     return SESSION_METRICS.get(session_id)
 
 
+def register_session(session_id: str) -> SessionMetricsCollector:
+    global _last_connect_session_id
+    _last_connect_session_id = session_id
+    collector = COLLECTORS.get(session_id) or SessionMetricsCollector(session_id)
+    COLLECTORS[session_id] = collector
+    collector.persist()
+    return collector
+
+
+def resolve_session_id(value: Any) -> str:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if _last_connect_session_id:
+        return _last_connect_session_id
+    return ""
+
+
+def collector_for(session_id: str) -> SessionMetricsCollector:
+    return COLLECTORS.get(session_id) or register_session(session_id)
+
+
+def finalize_session_metrics(session_id: str) -> dict[str, Any] | None:
+    collector = COLLECTORS.get(session_id)
+    if collector:
+        return collector.persist()
+    return get_session_metrics(session_id)
+
+
+def clear_session_metrics() -> None:
+    global _last_connect_session_id
+    SESSION_METRICS.clear()
+    COLLECTORS.clear()
+    _last_connect_session_id = None
+
+
 def attach_session_metrics(session_id: str) -> tuple[ServiceMetricsObserver, SessionMetricsCollector]:
     observer = ServiceMetricsObserver()
-    collector = SessionMetricsCollector(session_id)
+    collector = collector_for(session_id)
 
     @observer.event_handler("on_service_latency")
     async def on_service_latency(_observer, record: ServiceLatencyRecord) -> None:
         collector.add_latency(record)
+        collector.persist()
 
     @observer.event_handler("on_service_usage")
     async def on_service_usage(_observer, record: ServiceUsageRecord) -> None:
         collector.add_usage(record)
+        collector.persist()
 
     return observer, collector

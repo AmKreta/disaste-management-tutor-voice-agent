@@ -22,12 +22,7 @@ from .presentation_observer import PresentationObserver
 from .prompts.tutor_llm_prompt import tutor_llm_prompt
 from .prompts.tutor_stt_prompt import tutor_stt_prompt
 from .prompts.tutor_tss_propmt import tutor_tss_prompt
-from .session_metrics import (
-    SessionMetricsCollector,
-    attach_session_metrics,
-    get_session_metrics,
-    store_session_metrics,
-)
+from .session_metrics import SessionMetricsCollector, attach_session_metrics
 
 def get_api_key():
     api_key = os.getenv("OPENAI_API_KEY")
@@ -126,13 +121,13 @@ def add_event_handlers(
     metrics_collector: SessionMetricsCollector,
 ):
     @websocket_transport.event_handler("on_client_connected")
-    async def on_client_connected():
+    async def on_client_connected(_transport, _websocket):
         logger.info("[transport] client connected")
 
     @websocket_transport.event_handler("on_client_disconnected")
-    async def on_client_disconnected():
+    async def on_client_disconnected(_transport, _websocket):
         logger.info("[transport] client disconnected")
-        store_session_metrics(session_id, metrics_collector.snapshot())
+        metrics_collector.persist()
         await task.cancel()
 
 async def run_bot(websocket_client: WebSocket, voice: str = "alloy", session_id: str = ""):
@@ -143,8 +138,7 @@ async def run_bot(websocket_client: WebSocket, voice: str = "alloy", session_id:
     try:
         await runner.run(task)
     finally:
-        if session_id and get_session_metrics(session_id) is None:
-            store_session_metrics(session_id, metrics_collector.snapshot())
+        metrics_collector.persist()
         # The transport callback normally cancels the worker. Keep this as a
         # fallback for setup errors or any exit that bypasses that callback.
         if not task.has_finished():

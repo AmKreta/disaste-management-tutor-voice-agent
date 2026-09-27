@@ -26,10 +26,20 @@ function wait(ms: number): Promise<void> {
 }
 
 export async function fetchSessionMetrics(sessionId: string): Promise<SessionMetrics> {
-  let lastError: Error = new Error("Could not load session metrics");
+  const path = `${BASE_URL}/metrics/${encodeURIComponent(sessionId)}`;
+  const finalize = await fetch(path, { method: "POST" });
+  if (finalize.ok) {
+    return (await finalize.json()) as SessionMetrics;
+  }
+
+  let lastError = new Error(
+    finalize.status === 404
+      ? "Session metrics are not ready"
+      : "Could not load session metrics"
+  );
 
   for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt += 1) {
-    const response = await fetch(`${BASE_URL}/metrics/${encodeURIComponent(sessionId)}`);
+    const response = await fetch(path);
     if (response.ok) {
       return (await response.json()) as SessionMetrics;
     }
@@ -41,8 +51,6 @@ export async function fetchSessionMetrics(sessionId: string): Promise<SessionMet
     if (response.status !== 404 || attempt === RETRY_ATTEMPTS - 1) {
       break;
     }
-    // The websocket disconnect and the server-side pipeline shutdown are
-    // asynchronous. Give the server a few seconds to persist the final snapshot.
     await wait(RETRY_DELAY_MS);
   }
 

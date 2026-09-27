@@ -14,7 +14,12 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from services import run_bot
-from services.session_metrics import get_session_metrics
+from services.session_metrics import (
+    finalize_session_metrics,
+    get_session_metrics,
+    register_session,
+    resolve_session_id,
+)
 from services.voice_sample import is_known_voice, list_voices, synthesize_sample
 
 # Load environment variables
@@ -76,12 +81,22 @@ async def get_metrics(session_id: str) -> Dict[str, Any]:
     return metrics
 
 
+@app.post("/metrics/{session_id}")
+async def post_metrics(session_id: str) -> Dict[str, Any]:
+    metrics = finalize_session_metrics(session_id)
+    if metrics is None:
+        raise HTTPException(status_code=404, detail="Unknown session")
+    return metrics
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     voice = _voice_from_value(websocket.query_params.get("voice"))
-    session_id = _session_from_value(websocket.query_params.get("session"))
-    print("WebSocket connection accepted")
+    session_id = resolve_session_id(websocket.query_params.get("session")) or _session_from_value(
+        websocket.query_params.get("session")
+    )
+    print(f"WebSocket connection accepted session={session_id}")
     try:
         await run_bot(websocket, voice, session_id)
     except Exception as e:
@@ -99,6 +114,8 @@ async def bot_connect(request: Request) -> Dict[Any, Any]:
     if isinstance(body, dict):
         voice = _voice_from_value(body.get("voice"))
         session_id = _session_from_value(body.get("session_id"))
+    register_session(session_id)
+    print(f"Registered session metrics for {session_id}")
     return {"ws_url": f"ws://localhost:7860/ws?voice={voice}&session={session_id}"}
 
 
@@ -115,4 +132,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvicorn.run("main:app", host="0.0.0.0", port=7860, reload=True)

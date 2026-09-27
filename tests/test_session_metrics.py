@@ -5,7 +5,15 @@ from pipecat.observers.service_metrics_observer import (
     ServiceUsageRecord,
 )
 
-from services.session_metrics import SessionMetricsCollector, get_session_metrics, store_session_metrics
+from services.session_metrics import (
+    SessionMetricsCollector,
+    clear_session_metrics,
+    finalize_session_metrics,
+    get_session_metrics,
+    register_session,
+    resolve_session_id,
+    store_session_metrics,
+)
 
 
 def test_snapshot_totals_usage_and_ttfb():
@@ -72,3 +80,20 @@ def test_store_and_get_session_metrics():
     store_session_metrics("session-2", {"session_id": "session-2"})
     assert get_session_metrics("session-2") == {"session_id": "session-2"}
     assert get_session_metrics("missing") is None
+
+
+def test_register_session_makes_metrics_fetchable():
+    clear_session_metrics()
+    collector = register_session("session-3")
+    collector.add_usage(
+        ServiceUsageRecord(
+            kind=ServiceUsageKind.TTS,
+            processor="tts",
+            timestamp=1,
+            characters=9,
+        )
+    )
+    snapshot = finalize_session_metrics("session-3")
+    assert snapshot is not None
+    assert snapshot["totals"]["tts_characters"] == 9
+    assert resolve_session_id(None) == "session-3"
